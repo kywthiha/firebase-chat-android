@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    android:orientation="vertical"
+    xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+        <Button
+            android:id="@+id/choose"
+            android:text="Choose"
+            android:onClick="LanchCamera"
+            android:layout_above="@+id/imv_test_view"
+            android:layout_width="match_parent"
+            android:layout_marginBottom="1dp"
+            android:layout_height="wrap_content" />
+        <ImageView
+            android:src="@drawable/moesetwine"
+            android:scaleType="center"
+            android:onClick="imageView"
+            android:id="@+id/imv_test_view"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+        <ProgressBar
+            android:id="@+id/loading_icon"
+            android:visibility="gone"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+        <Button
+            android:id="@+id/uplaod"
+            android:layout_centerInParent="true"
+            android:layout_below="@+id/imv_test_view"
+            android:text="Upload"
+            android:layout_marginTop="1dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+
+
+
+</LinearLayout>
