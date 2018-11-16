@@ -3,10 +3,15 @@ package com.example.kyaw.firebasetutorial.chat.activity;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.Application;
+import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.os.Bundle;
+import android.os.Handler;
 import android.provider.MediaStore;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
@@ -30,6 +35,8 @@ import com.example.kyaw.firebasetutorial.chat.model.MessageType;
 import com.example.kyaw.firebasetutorial.chat.model.Type;
 import com.example.kyaw.firebasetutorial.chat.model.User;
 import com.example.kyaw.firebasetutorial.chat.utility.FileUtil;
+import com.example.kyaw.firebasetutorial.chat.utility.Image;
+import com.example.kyaw.firebasetutorial.chat.utility.ImageUpload;
 import com.example.kyaw.firebasetutorial.chat.utility.ImageUtil;
 import com.google.firebase.database.ChildEventListener;
 import com.google.firebase.database.DataSnapshot;
@@ -38,6 +45,7 @@ import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.Query;
 import com.google.firebase.database.ServerValue;
+import com.google.firebase.database.ValueEventListener;
 
 import java.io.File;
 import java.io.IOException;
@@ -50,7 +58,7 @@ public class MessageViewActivity extends AppCompatActivity implements View.OnCli
     LinearLayoutManager ly;
     EditText editText;
     private static final int showItem=5;
-    int itempos=0,item=0;
+    int itempos=0;
     SwipeRefreshLayout swipeRefreshLayout;
     private static String lastitem="";
     private MessageAdapter mAdapter;
@@ -78,10 +86,28 @@ public class MessageViewActivity extends AppCompatActivity implements View.OnCli
         Log.d(TAG, "onActivityResult:" + requestCode + ":" + resultCode + ":" + data);
         if (requestCode == RC_TAKE_PICTURE) {
             if (resultCode == RESULT_OK) {
+
                 try {
-                    File actualImage = FileUtil.from(this, data.getData());
-                    ImageUtil imgu = new ImageUtil(actualImage, this, user.getId(), "Pakokku");
-                    imgu.uploadImage();
+                    final File actualImage = FileUtil.from(this, data.getData());
+                    final Context context=this;
+                    AlertDialog.Builder builder = new AlertDialog.Builder(this);
+                    builder.setMessage("Are you sure want to send this photo");
+                    builder.setPositiveButton("SEND", new DialogInterface.OnClickListener() {
+                        public void onClick(DialogInterface dialog, int id) {
+                            // User clicked OK button
+                            ImageUtil imgu = new ImageUtil(actualImage, context, user.getId(), "Pakokku");
+                            imgu.uploadImage();
+                        }
+
+                    });
+                    builder.setNegativeButton("CANCEL", new DialogInterface.OnClickListener() {
+                        public void onClick(DialogInterface dialog, int id) {
+                            // User cancelled the dialog
+                        }
+                    });
+                    AlertDialog dialog = builder.create();
+                    dialog.show();
+
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -91,15 +117,25 @@ public class MessageViewActivity extends AppCompatActivity implements View.OnCli
             }
         } else if (requestCode == CAMERA_REQUEST) {
             if (resultCode == RESULT_OK) {
+                    final Image image=new Image((Bitmap)data.getExtras().get("data"),user.getId(),"Pakokku");
+                    final Context context=this;
+                AlertDialog.Builder builder = new AlertDialog.Builder(this);
+                builder.setMessage("Are you sure want to send this photo");
+                builder.setPositiveButton("SEND", new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int id) {
+                        // User clicked OK button
+                        new ImageUpload(context).execute(image);
+                    }
 
-                File actualImage = null;
-                try {
-                    actualImage = FileUtil.from(this,((Bitmap)data.getExtras().get("data")));
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-                ImageUtil imgu = new ImageUtil(actualImage, this, user.getId(), "Pakokku");
-                imgu.uploadImage();
+                });
+                builder.setNegativeButton("CANCEL", new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int id) {
+                        // User cancelled the dialog
+                    }
+                });
+                AlertDialog dialog = builder.create();
+                dialog.show();
+
 
             } else {
                 Toast.makeText(this, "", Toast.LENGTH_SHORT).show();
@@ -115,6 +151,7 @@ public class MessageViewActivity extends AppCompatActivity implements View.OnCli
     }
     private void loadMoreData() {
         DatabaseReference database = FirebaseDatabase.getInstance().getReference().child("messages").child(user.getId());
+
         ChildEventListener childEventListener = new ChildEventListener() {
             @Override
             public void onChildAdded(@NonNull DataSnapshot dataSnapshot, @Nullable String s) {
@@ -171,6 +208,17 @@ public class MessageViewActivity extends AppCompatActivity implements View.OnCli
 
         Query query=database.orderByKey().endAt(lastitem).limitToLast(showItem);
         query.addChildEventListener(childEventListener);
+        if(moreItem){
+            Handler handler=new Handler();
+            Runnable r=new Runnable() {
+                @Override
+                public void run() {
+                    swipeRefreshLayout.setRefreshing(false);
+                    Toast.makeText(getApplicationContext(),"OK",Toast.LENGTH_SHORT).show();
+                }
+            };
+            handler.postDelayed(r,2000);
+        }
     }
 
 
@@ -186,6 +234,7 @@ public class MessageViewActivity extends AppCompatActivity implements View.OnCli
             choose_iamge_or_camera = (ImageButton) findViewById(R.id.add_btn);
             choose_iamge_or_camera.setOnClickListener(this);
             swipeRefreshLayout=(SwipeRefreshLayout)findViewById(R.id.swiperefresh);
+            swipeRefreshLayout.setRefreshing(true);
            final LinearLayoutManager  ly=new LinearLayoutManager(this);
             mAdapter=new MessageAdapter(this,messages);
             recy.setAdapter(mAdapter);
@@ -249,8 +298,12 @@ public class MessageViewActivity extends AppCompatActivity implements View.OnCli
                     lastitem=dataSnapshot.getKey();
                 }
 
+
                 mAdapter.notifyItemInserted(messages.size()-1);
+                moreItem=false;
                 recy.scrollToPosition(messages.size()-1);
+                swipeRefreshLayout.setRefreshing(false);
+
             }
 
             @Override
@@ -274,11 +327,23 @@ public class MessageViewActivity extends AppCompatActivity implements View.OnCli
 
             @Override
             public void onCancelled(@NonNull DatabaseError databaseError) {
+                Toast.makeText(getApplicationContext(),"No data",Toast.LENGTH_SHORT).show();
 
             }
         };
         Query query=database.orderByKey().limitToLast(showItem);
         query.addChildEventListener(childEventListener);
+        if(moreItem){
+            Handler handler=new Handler();
+            Runnable r=new Runnable() {
+                @Override
+                public void run() {
+                    swipeRefreshLayout.setRefreshing(false);
+                    Toast.makeText(getApplicationContext(),"OK",Toast.LENGTH_SHORT).show();
+                }
+            };
+            handler.postDelayed(r,2000);
+        }
     }
 
 
